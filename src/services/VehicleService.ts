@@ -1,12 +1,37 @@
-import type { CreateVehicleBody, ListVehiclesQuery, PaginatedVehiclesResponse, UpdateVehicleBody, Vehicle } from '../types/vehicle.types';
+import type {
+  CreateVehicleBody,
+  ListVehiclesQuery,
+  PaginatedVehiclesResponse,
+  UpdateVehicleBody,
+  Vehicle,
+} from '../types/vehicle.types';
+import { VehicleRepository } from '../repositories/VehicleRepository';
+import { NotFoundError } from '../utils/errors';
 
 export class VehicleService {
-  async list(_query: ListVehiclesQuery): Promise<PaginatedVehiclesResponse> {
-    throw new Error('Not implemented');
+  private readonly repository = new VehicleRepository();
+
+  async list(query: ListVehiclesQuery): Promise<PaginatedVehiclesResponse> {
+    const { data, total } = await this.repository.list(query);
+
+    return {
+      data,
+      meta: {
+        page: query.page,
+        limit: query.limit,
+        total,
+      },
+    };
   }
 
-  async getById(_id: number): Promise<Vehicle> {
-    throw new Error('Not implemented');
+  async getById(id: number): Promise<Vehicle> {
+    const vehicle = await this.repository.findById(id);
+
+    if (!vehicle) {
+      throw new NotFoundError('Vehicle not found');
+    }
+
+    return vehicle;
   }
 
   async create(_body: CreateVehicleBody, _photoPath?: string): Promise<Vehicle> {

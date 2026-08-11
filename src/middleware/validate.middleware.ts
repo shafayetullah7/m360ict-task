@@ -16,7 +16,17 @@ export function validate(schema: ObjectSchema, source: ValidationSource = 'body'
       return;
     }
 
-    req[source] = value;
+    req.validated = {
+      ...req.validated,
+      [source]: value,
+    };
+
+    if (source === 'body') {
+      req.body = value;
+    } else {
+      Object.assign(req[source], value);
+    }
+
     next();
   };
 }

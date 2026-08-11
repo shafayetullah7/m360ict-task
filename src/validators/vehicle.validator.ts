@@ -20,3 +20,7 @@ export const listVehiclesQuerySchema = Joi.object({
   category: Joi.string(),
   search: Joi.string(),
 });
+
+export const vehicleIdParamSchema = Joi.object({
+  id: Joi.number().integer().positive().required(),
+});
