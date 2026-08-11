@@ -42,6 +42,8 @@ export const updateRentalSchema = Joi.object({
   });
 
 export const listRentalsQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(10),
   vehicle_id: Joi.number().integer().positive(),
   status: Joi.string().valid('booked', 'ongoing', 'completed', 'cancelled'),
   start_date: Joi.string().pattern(dateOnlyPattern).messages({

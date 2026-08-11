@@ -60,28 +60,41 @@ export class RentalRepository {
     return row ? this.mapRow(row) : null;
   }
 
-  async list(query: ListRentalsQuery): Promise<Rental[]> {
+  async list(query: ListRentalsQuery): Promise<{ data: Rental[]; total: number }> {
+    const { page, limit, vehicle_id, status, start_date, end_date } = query;
+
     let queryBuilder = db<RentalRow>('rentals');
 
-    if (query.vehicle_id !== undefined) {
-      queryBuilder = queryBuilder.where('vehicle_id', query.vehicle_id);
+    if (vehicle_id !== undefined) {
+      queryBuilder = queryBuilder.where('vehicle_id', vehicle_id);
     }
 
-    if (query.status !== undefined) {
-      queryBuilder = queryBuilder.where('status', query.status);
+    if (status !== undefined) {
+      queryBuilder = queryBuilder.where('status', status);
     }
 
-    if (query.start_date !== undefined) {
-      queryBuilder = queryBuilder.where('end_date', '>=', query.start_date);
+    if (start_date !== undefined) {
+      queryBuilder = queryBuilder.where('end_date', '>=', start_date);
     }
 
-    if (query.end_date !== undefined) {
-      queryBuilder = queryBuilder.where('start_date', '<=', query.end_date);
+    if (end_date !== undefined) {
+      queryBuilder = queryBuilder.where('start_date', '<=', end_date);
     }
 
-    const rows = await queryBuilder.orderBy('id', 'asc');
+    const countResult = (await queryBuilder.clone().count('* as count').first()) as
+      | { count: string | number }
+      | undefined;
+    const total = Number(countResult?.count ?? 0);
 
-    return rows.map((row) => this.mapRow(row));
+    const rows = await queryBuilder
+      .orderBy('id', 'asc')
+      .limit(limit)
+      .offset((page - 1) * limit);
+
+    return {
+      data: rows.map((row) => this.mapRow(row)),
+      total,
+    };
   }
 
   /**

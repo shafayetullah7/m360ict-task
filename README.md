@@ -163,11 +163,20 @@ Dates: `YYYY-MM-DD`. `total_amount` is **always computed server-side** (`daily_r
 
 | Method | Path | Notes |
 |--------|------|--------|
-| `GET` | `/rentals` | Query: `vehicle_id`, `status`, `start_date`, `end_date` (overlap-style filter) |
+| `GET` | `/rentals` | Query: `page` (default 1), `limit` (default 10, max 100), `vehicle_id`, `status`, `start_date`, `end_date` (overlap-style filter) |
 | `GET` | `/rentals/:id` | |
 | `POST` | `/rentals` | Body: `vehicle_id`, `customer_name`, `customer_phone`, `start_date`, `end_date` → **409** if overlap with `booked`/`ongoing` |
 | `PUT` | `/rentals/:id` | Partial update; overlap re-checked when dates/vehicle/status affect active bookings |
 | `DELETE` | `/rentals/:id` | Sets `status` to `cancelled`; **204** |
+
+List response:
+
+```json
+{
+  "data": [{ "id", "vehicle_id", "customer_name", "start_date", "end_date", "total_amount", "status", ... }],
+  "meta": { "page", "limit", "total" }
+}
+```
 
 Create body (example):
 

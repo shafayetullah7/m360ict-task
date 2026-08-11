@@ -33,12 +33,12 @@ export interface UpdateRentalBody {
 }
 
 export interface ListRentalsQuery {
+  page: number;
+  limit: number;
   vehicle_id?: number;
   status?: RentalStatus;
   start_date?: string;
   end_date?: string;
-  page?: number;
-  limit?: number;
 }
 
 export type PaginatedRentalsResponse = PaginatedResponse<Rental>;

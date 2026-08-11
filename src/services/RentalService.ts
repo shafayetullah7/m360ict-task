@@ -2,6 +2,7 @@ import db from '../config/db';
 import type {
   CreateRentalBody,
   ListRentalsQuery,
+  PaginatedRentalsResponse,
   Rental,
   RentalStatus,
   UpdateRentalBody,
@@ -30,8 +31,17 @@ function isActiveStatus(status: RentalStatus): boolean {
 export class RentalService {
   private readonly repository = new RentalRepository();
 
-  async list(query: ListRentalsQuery): Promise<Rental[]> {
-    return this.repository.list(query);
+  async list(query: ListRentalsQuery): Promise<PaginatedRentalsResponse> {
+    const { data, total } = await this.repository.list(query);
+
+    return {
+      data,
+      meta: {
+        page: query.page,
+        limit: query.limit,
+        total,
+      },
+    };
   }
 
   async getById(id: number): Promise<Rental> {
