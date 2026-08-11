@@ -11,8 +11,8 @@ const db = knex({
     database: env.DB.NAME,
   },
   pool: {
-    min: 2,
-    max: 10,
+    min: env.DB.POOL_MIN,
+    max: env.DB.POOL_MAX,
   },
 });
 
