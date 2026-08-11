@@ -1,7 +1,7 @@
-import type { CreateRentalBody, Rental, UpdateRentalBody } from '../types/rental.types';
+import type { CreateRentalBody, ListRentalsQuery, Rental, UpdateRentalBody } from '../types/rental.types';
 
 export class RentalService {
-  async list(_query: Record<string, unknown>): Promise<Rental[]> {
+  async list(_query: ListRentalsQuery): Promise<Rental[]> {
     throw new Error('Not implemented');
   }
 

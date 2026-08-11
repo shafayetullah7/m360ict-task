@@ -1,5 +1,3 @@
-// Phase 7: rental pricing utilities
-
-export function calculateTotalAmount(_dailyRate: number, _days: number): number {
-  throw new Error('Not implemented');
+export function calculateTotalAmount(dailyRate: number, days: number): number {
+  return Math.round(dailyRate * days * 100) / 100;
 }

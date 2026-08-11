@@ -1,7 +1,7 @@
-import type { CreateVehicleBody, UpdateVehicleBody, Vehicle } from '../types/vehicle.types';
+import type { CreateVehicleBody, ListVehiclesQuery, PaginatedVehiclesResponse, UpdateVehicleBody, Vehicle } from '../types/vehicle.types';
 
 export class VehicleService {
-  async list(_query: Record<string, unknown>): Promise<{ data: Vehicle[]; meta: unknown }> {
+  async list(_query: ListVehiclesQuery): Promise<PaginatedVehiclesResponse> {
     throw new Error('Not implemented');
   }
 

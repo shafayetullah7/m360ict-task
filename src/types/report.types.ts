@@ -6,12 +6,19 @@ export interface VehicleReportRow {
   revenue: number;
 }
 
+export interface TopVehicleReportRow {
+  id: number;
+  name: string;
+  revenue: number;
+}
+
+export interface RentalsReportQuery {
+  month: string;
+  vehicle_id?: number;
+}
+
 export interface RentalsReportResponse {
   month: string;
   vehicles: VehicleReportRow[];
-  top_vehicle: {
-    id: number;
-    name: string;
-    revenue: number;
-  } | null;
+  top_vehicle: TopVehicleReportRow | null;
 }

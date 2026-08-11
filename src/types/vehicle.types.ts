@@ -1,3 +1,5 @@
+import type { PaginatedResponse } from './common.types';
+
 export interface Vehicle {
   id: number;
   name: string;
@@ -23,3 +25,12 @@ export interface UpdateVehicleBody {
   category?: string;
   daily_rate?: number;
 }
+
+export interface ListVehiclesQuery {
+  page: number;
+  limit: number;
+  category?: string;
+  search?: string;
+}
+
+export type PaginatedVehiclesResponse = PaginatedResponse<Vehicle>;

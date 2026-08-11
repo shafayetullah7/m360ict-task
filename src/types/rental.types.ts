@@ -1,3 +1,5 @@
+import type { PaginatedResponse } from './common.types';
+
 export type RentalStatus = 'booked' | 'ongoing' | 'completed' | 'cancelled';
 
 export interface Rental {
@@ -29,3 +31,14 @@ export interface UpdateRentalBody {
   end_date?: string;
   status?: RentalStatus;
 }
+
+export interface ListRentalsQuery {
+  vehicle_id?: number;
+  status?: RentalStatus;
+  start_date?: string;
+  end_date?: string;
+  page?: number;
+  limit?: number;
+}
+
+export type PaginatedRentalsResponse = PaginatedResponse<Rental>;

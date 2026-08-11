@@ -1,23 +1,44 @@
-// Phase 4: date overlap and month-boundary utilities
+function parseDateOnly(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
 
-export function countRentalDays(_startDate: string, _endDate: string): number {
-  throw new Error('Not implemented');
+function daysBetweenInclusive(start: Date, end: Date): number {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return Math.floor((end.getTime() - start.getTime()) / msPerDay) + 1;
+}
+
+export function countRentalDays(startDate: string, endDate: string): number {
+  const start = parseDateOnly(startDate);
+  const end = parseDateOnly(endDate);
+  return daysBetweenInclusive(start, end);
 }
 
 export function datesOverlap(
-  _aStart: string,
-  _aEnd: string,
-  _bStart: string,
-  _bEnd: string,
+  aStart: string,
+  aEnd: string,
+  bStart: string,
+  bEnd: string,
 ): boolean {
-  throw new Error('Not implemented');
+  return aStart <= bEnd && aEnd >= bStart;
 }
 
 export function daysInMonth(
-  _startDate: string,
-  _endDate: string,
-  _year: number,
-  _month: number,
+  startDate: string,
+  endDate: string,
+  year: number,
+  month: number,
 ): number {
-  throw new Error('Not implemented');
+  const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+  const clipStart = startDate > monthStart ? startDate : monthStart;
+  const clipEnd = endDate < monthEnd ? endDate : monthEnd;
+
+  if (clipStart > clipEnd) {
+    return 0;
+  }
+
+  return countRentalDays(clipStart, clipEnd);
 }

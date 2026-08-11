@@ -1,7 +1,7 @@
-import type { Rental } from '../types/rental.types';
+import type { RentalsReportQuery, VehicleReportRow } from '../types/report.types';
 
 export class ReportRepository {
-  async getMonthlyStats(_month: string, _vehicleId?: number): Promise<Rental[]> {
+  async getMonthlyStats(_query: RentalsReportQuery): Promise<VehicleReportRow[]> {
     throw new Error('Not implemented');
   }
 }
