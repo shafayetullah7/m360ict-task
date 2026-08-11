@@ -13,7 +13,11 @@ export const updateRentalSchema = Joi.object({
   customer_name: Joi.string(),
   customer_phone: Joi.string(),
   start_date: Joi.date().iso(),
-  end_date: Joi.date().iso(),
+  end_date: Joi.date().iso().when('start_date', {
+    is: Joi.exist(),
+    then: Joi.date().iso().min(Joi.ref('start_date')),
+    otherwise: Joi.date().iso(),
+  }),
   status: Joi.string().valid('booked', 'ongoing', 'completed', 'cancelled'),
 }).min(1);
 
