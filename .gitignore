@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+knexfile.js
 
 # Environment variables
 .env
