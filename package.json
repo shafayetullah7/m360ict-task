@@ -24,6 +24,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "joi": "^18.2.3",
+    "jsonwebtoken": "^9.0.3",
     "knex": "^3.3.0",
     "multer": "^2.2.0",
     "pg": "^8.23.0"
@@ -31,6 +32,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.2.0",
     "@types/node": "^26.2.0",
     "@typescript-eslint/eslint-plugin": "^8.67.0",

@@ -1,5 +1,16 @@
 import { Router } from 'express';
+import { AuthService } from '../services/AuthService';
+import { validate } from '../middleware/validate.middleware';
+import { loginSchema } from '../validators/auth.validator';
+import type { LoginBody } from '../types/auth.types';
 
 const router = Router();
+const authService = new AuthService();
+
+router.post('/login', validate(loginSchema), async (req, res) => {
+  const body = req.body as LoginBody;
+  const result = await authService.login(body);
+  res.status(200).json(result);
+});
 
 export default router;
