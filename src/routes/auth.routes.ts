@@ -8,7 +8,7 @@ const router = Router();
 const authService = new AuthService();
 
 router.post('/login', validate(loginSchema), async (req, res) => {
-  const body = req.body as LoginBody;
+  const body = req.validated?.body as LoginBody;
   const result = await authService.login(body);
   res.status(200).json(result);
 });
