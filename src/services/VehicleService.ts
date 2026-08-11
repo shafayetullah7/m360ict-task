@@ -1,3 +1,5 @@
+import fs from 'fs/promises';
+import path from 'path';
 import type {
   CreateVehicleBody,
   ListVehiclesQuery,
@@ -5,11 +7,22 @@ import type {
   UpdateVehicleBody,
   Vehicle,
 } from '../types/vehicle.types';
+import env from '../config/env';
 import { VehicleRepository } from '../repositories/VehicleRepository';
-import { NotFoundError } from '../utils/errors';
+import { ConflictError, NotFoundError, ValidationError } from '../utils/errors';
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code: string }).code === '23505'
+  );
+}
 
 export class VehicleService {
   private readonly repository = new VehicleRepository();
+  private readonly uploadDir = path.resolve(env.UPLOAD_PATH);
 
   async list(query: ListVehiclesQuery): Promise<PaginatedVehiclesResponse> {
     const { data, total } = await this.repository.list(query);
@@ -34,15 +47,64 @@ export class VehicleService {
     return vehicle;
   }
 
-  async create(_body: CreateVehicleBody, _photoPath?: string): Promise<Vehicle> {
-    throw new Error('Not implemented');
+  async create(body: CreateVehicleBody, photoPath?: string): Promise<Vehicle> {
+    try {
+      return await this.repository.create(body, photoPath);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictError('Plate number already exists');
+      }
+      throw error;
+    }
   }
 
-  async update(_id: number, _body: UpdateVehicleBody, _photoPath?: string): Promise<Vehicle> {
-    throw new Error('Not implemented');
+  async update(id: number, body: UpdateVehicleBody, photoPath?: string): Promise<Vehicle> {
+    const existing = await this.repository.findById(id);
+
+    if (!existing) {
+      throw new NotFoundError('Vehicle not found');
+    }
+
+    const hasBodyUpdate = Object.keys(body).length > 0;
+    if (!hasBodyUpdate && !photoPath) {
+      throw new ValidationError('At least one field or photo is required');
+    }
+
+    if (photoPath && existing.photo_path) {
+      await this.removePhotoFile(existing.photo_path);
+    }
+
+    try {
+      const updated = await this.repository.update(id, body, photoPath);
+
+      if (!updated) {
+        throw new NotFoundError('Vehicle not found');
+      }
+
+      return updated;
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictError('Plate number already exists');
+      }
+      throw error;
+    }
   }
 
-  async delete(_id: number): Promise<void> {
-    throw new Error('Not implemented');
+  async delete(id: number): Promise<void> {
+    const deleted = await this.repository.softDelete(id);
+
+    if (!deleted) {
+      throw new NotFoundError('Vehicle not found');
+    }
+  }
+
+  private async removePhotoFile(photoPath: string): Promise<void> {
+    const filePath = path.join(this.uploadDir, photoPath);
+
+    try {
+      await fs.unlink(filePath);
+    } catch {
+      // Ignore missing files on disk.
+    }
   }
 }

@@ -1,12 +1,27 @@
-import type { CreateRentalBody, ListRentalsQuery, Rental, UpdateRentalBody } from '../types/rental.types';
+import type {
+  CreateRentalBody,
+  ListRentalsQuery,
+  Rental,
+  UpdateRentalBody,
+} from '../types/rental.types';
+import { RentalRepository } from '../repositories/RentalRepository';
+import { NotFoundError } from '../utils/errors';
 
 export class RentalService {
-  async list(_query: ListRentalsQuery): Promise<Rental[]> {
-    throw new Error('Not implemented');
+  private readonly repository = new RentalRepository();
+
+  async list(query: ListRentalsQuery): Promise<Rental[]> {
+    return this.repository.list(query);
   }
 
-  async getById(_id: number): Promise<Rental> {
-    throw new Error('Not implemented');
+  async getById(id: number): Promise<Rental> {
+    const rental = await this.repository.findById(id);
+
+    if (!rental) {
+      throw new NotFoundError('Rental not found');
+    }
+
+    return rental;
   }
 
   async create(_body: CreateRentalBody): Promise<Rental> {

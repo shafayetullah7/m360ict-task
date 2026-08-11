@@ -20,6 +20,10 @@ export const updateRentalSchema = Joi.object({
 export const listRentalsQuerySchema = Joi.object({
   vehicle_id: Joi.number().integer().positive(),
   status: Joi.string().valid('booked', 'ongoing', 'completed', 'cancelled'),
-  start_date: Joi.date().iso(),
-  end_date: Joi.date().iso(),
+  start_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const rentalIdParamSchema = Joi.object({
+  id: Joi.number().integer().positive().required(),
 });

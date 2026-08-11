@@ -1,5 +1,10 @@
 import db from '../config/db';
-import type { ListVehiclesQuery, Vehicle } from '../types/vehicle.types';
+import type {
+  CreateVehicleBody,
+  ListVehiclesQuery,
+  UpdateVehicleBody,
+  Vehicle,
+} from '../types/vehicle.types';
 
 type VehicleRow = {
   id: number;
@@ -61,5 +66,57 @@ export class VehicleRepository {
       data: rows.map((row) => this.mapRow(row)),
       total,
     };
+  }
+
+  async create(body: CreateVehicleBody, photoPath?: string): Promise<Vehicle> {
+    const [row] = await db<VehicleRow>('vehicles')
+      .insert({
+        name: body.name,
+        plate_number: body.plate_number,
+        category: body.category,
+        daily_rate: body.daily_rate,
+        photo_path: photoPath ?? null,
+      })
+      .returning('*');
+
+    return this.mapRow(row);
+  }
+
+  async update(
+    id: number,
+    body: UpdateVehicleBody,
+    photoPath?: string,
+  ): Promise<Vehicle | null> {
+    const updateData: Record<string, unknown> = {
+      updated_at: db.fn.now(),
+    };
+
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.plate_number !== undefined) updateData.plate_number = body.plate_number;
+    if (body.category !== undefined) updateData.category = body.category;
+    if (body.daily_rate !== undefined) updateData.daily_rate = body.daily_rate;
+    if (photoPath !== undefined) updateData.photo_path = photoPath;
+
+    const rows = await db<VehicleRow>('vehicles')
+      .where({ id })
+      .whereNull('deleted_at')
+      .update(updateData)
+      .returning('*');
+
+    const row = rows[0];
+
+    return row ? this.mapRow(row) : null;
+  }
+
+  async softDelete(id: number): Promise<boolean> {
+    const updated = await db('vehicles')
+      .where({ id })
+      .whereNull('deleted_at')
+      .update({
+        deleted_at: db.fn.now(),
+        updated_at: db.fn.now(),
+      });
+
+    return updated > 0;
   }
 }

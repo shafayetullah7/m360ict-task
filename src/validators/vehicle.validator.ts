@@ -12,7 +12,7 @@ export const updateVehicleSchema = Joi.object({
   plate_number: Joi.string(),
   category: Joi.string(),
   daily_rate: Joi.number().positive(),
-}).min(1);
+});
 
 export const listVehiclesQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
