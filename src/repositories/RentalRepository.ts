@@ -54,6 +54,12 @@ export class RentalRepository {
     return row ? this.mapRow(row) : null;
   }
 
+  async findByIdForUpdate(id: number, trx: Knex.Transaction): Promise<Rental | null> {
+    const row = await trx<RentalRow>('rentals').where({ id }).forUpdate().first();
+
+    return row ? this.mapRow(row) : null;
+  }
+
   async list(query: ListRentalsQuery): Promise<Rental[]> {
     let queryBuilder = db<RentalRow>('rentals');
 
@@ -140,9 +146,15 @@ export class RentalRepository {
     return this.mapRow(row);
   }
 
-  async update(id: number, body: UpdateRentalBody, totalAmount?: number): Promise<Rental | null> {
+  async update(
+    id: number,
+    body: UpdateRentalBody,
+    totalAmount?: number,
+    trx?: Knex.Transaction,
+  ): Promise<Rental | null> {
+    const connection = trx ?? db;
     const updateData: Record<string, unknown> = {
-      updated_at: db.fn.now(),
+      updated_at: connection.fn.now(),
     };
 
     if (body.vehicle_id !== undefined) updateData.vehicle_id = body.vehicle_id;
@@ -153,17 +165,21 @@ export class RentalRepository {
     if (body.status !== undefined) updateData.status = body.status;
     if (totalAmount !== undefined) updateData.total_amount = totalAmount;
 
-    const rows = await db<RentalRow>('rentals').where({ id }).update(updateData).returning('*');
+    const rows = await connection<RentalRow>('rentals')
+      .where({ id })
+      .update(updateData)
+      .returning('*');
 
     const row = rows[0];
 
     return row ? this.mapRow(row) : null;
   }
 
-  async cancel(id: number): Promise<boolean> {
-    const updated = await db('rentals').where({ id }).update({
+  async cancel(id: number, trx?: Knex.Transaction): Promise<boolean> {
+    const connection = trx ?? db;
+    const updated = await connection('rentals').where({ id }).update({
       status: 'cancelled',
-      updated_at: db.fn.now(),
+      updated_at: connection.fn.now(),
     });
 
     return updated > 0;

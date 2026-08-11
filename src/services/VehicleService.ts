@@ -8,7 +8,9 @@ import type {
   Vehicle,
 } from '../types/vehicle.types';
 import env from '../config/env';
+import db from '../config/db';
 import { VehicleRepository } from '../repositories/VehicleRepository';
+import { lockVehiclesForBooking } from '../utils/db-lock.utils';
 import { ConflictError, NotFoundError, ValidationError } from '../utils/errors';
 
 function isUniqueViolation(error: unknown): boolean {
@@ -91,11 +93,19 @@ export class VehicleService {
   }
 
   async delete(id: number): Promise<void> {
-    const deleted = await this.repository.softDelete(id);
+    await db.transaction(async (trx) => {
+      const lockedVehicles = await lockVehiclesForBooking(trx, [id]);
 
-    if (!deleted) {
-      throw new NotFoundError('Vehicle not found');
-    }
+      if (!lockedVehicles.get(id)) {
+        throw new NotFoundError('Vehicle not found');
+      }
+
+      const deleted = await this.repository.softDelete(id, trx);
+
+      if (!deleted) {
+        throw new NotFoundError('Vehicle not found');
+      }
+    });
   }
 
   private async removePhotoFile(photoPath: string): Promise<void> {

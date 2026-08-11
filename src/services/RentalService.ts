@@ -7,7 +7,7 @@ import type {
   UpdateRentalBody,
 } from '../types/rental.types';
 import { RentalRepository } from '../repositories/RentalRepository';
-import { VehicleRepository } from '../repositories/VehicleRepository';
+import { lockVehiclesForBooking } from '../utils/db-lock.utils';
 import { countRentalDays } from '../utils/date.utils';
 import { calculateTotalAmount } from '../utils/rental.utils';
 import { ConflictError, NotFoundError, ValidationError } from '../utils/errors';
@@ -29,7 +29,6 @@ function isActiveStatus(status: RentalStatus): boolean {
 
 export class RentalService {
   private readonly repository = new RentalRepository();
-  private readonly vehicleRepository = new VehicleRepository();
 
   async list(query: ListRentalsQuery): Promise<Rental[]> {
     return this.repository.list(query);
@@ -50,7 +49,10 @@ export class RentalService {
     startDate: string,
     endDate: string,
   ): Promise<number> {
-    const vehicle = await this.vehicleRepository.findById(vehicleId);
+    const vehicle = await db('vehicles')
+      .where({ id: vehicleId })
+      .whereNull('deleted_at')
+      .first();
 
     if (!vehicle) {
       throw new NotFoundError('Vehicle not found');
@@ -58,7 +60,7 @@ export class RentalService {
 
     const days = countRentalDays(startDate, endDate);
 
-    return calculateTotalAmount(vehicle.daily_rate, days);
+    return calculateTotalAmount(Number(vehicle.daily_rate), days);
   }
 
   async assertNoOverlap(
@@ -84,11 +86,8 @@ export class RentalService {
     const endDate = normalizeDate(body.end_date);
 
     return db.transaction(async (trx) => {
-      const vehicle = await trx('vehicles')
-        .where({ id: body.vehicle_id })
-        .whereNull('deleted_at')
-        .forUpdate()
-        .first();
+      const lockedVehicles = await lockVehiclesForBooking(trx, [body.vehicle_id]);
+      const vehicle = lockedVehicles.get(body.vehicle_id);
 
       if (!vehicle) {
         throw new NotFoundError('Vehicle not found');
@@ -124,70 +123,112 @@ export class RentalService {
   }
 
   async update(id: number, body: UpdateRentalBody): Promise<Rental> {
-    const existing = await this.repository.findById(id);
+    return db.transaction(async (trx) => {
+      const existing = await this.repository.findByIdForUpdate(id, trx);
 
-    if (!existing) {
-      throw new NotFoundError('Rental not found');
-    }
-
-    const vehicleId = body.vehicle_id ?? existing.vehicle_id;
-    const startDate =
-      body.start_date !== undefined ? normalizeDate(body.start_date) : existing.start_date;
-    const endDate =
-      body.end_date !== undefined ? normalizeDate(body.end_date) : existing.end_date;
-    const status = body.status ?? existing.status;
-
-    if (endDate < startDate) {
-      throw new ValidationError('end_date must be on or after start_date');
-    }
-
-    const datesOrVehicleChanged =
-      body.vehicle_id !== undefined ||
-      body.start_date !== undefined ||
-      body.end_date !== undefined;
-
-    if (datesOrVehicleChanged) {
-      const vehicle = await this.vehicleRepository.findById(vehicleId);
-
-      if (!vehicle) {
-        throw new NotFoundError('Vehicle not found');
+      if (!existing) {
+        throw new NotFoundError('Rental not found');
       }
-    }
 
-    if (isActiveStatus(status)) {
-      await this.assertNoOverlap(vehicleId, startDate, endDate, id);
-    }
+      const vehicleId = body.vehicle_id ?? existing.vehicle_id;
+      const startDate =
+        body.start_date !== undefined ? normalizeDate(body.start_date) : existing.start_date;
+      const endDate =
+        body.end_date !== undefined ? normalizeDate(body.end_date) : existing.end_date;
+      const status = body.status ?? existing.status;
 
-    let totalAmount: number | undefined;
+      if (endDate < startDate) {
+        throw new ValidationError('end_date must be on or after start_date');
+      }
 
-    if (datesOrVehicleChanged) {
-      totalAmount = await this.calculateTotalAmount(vehicleId, startDate, endDate);
-    }
+      const datesOrVehicleChanged =
+        body.vehicle_id !== undefined ||
+        body.start_date !== undefined ||
+        body.end_date !== undefined;
 
-    const updateBody: UpdateRentalBody = { ...body };
+      const needsVehicleLocks = datesOrVehicleChanged || isActiveStatus(status);
 
-    if (body.start_date !== undefined) {
-      updateBody.start_date = startDate;
-    }
+      let lockedVehicles: Awaited<ReturnType<typeof lockVehiclesForBooking>> | undefined;
 
-    if (body.end_date !== undefined) {
-      updateBody.end_date = endDate;
-    }
+      if (needsVehicleLocks) {
+        const vehicleIds =
+          vehicleId === existing.vehicle_id
+            ? [vehicleId]
+            : [existing.vehicle_id, vehicleId];
 
-    const updated = await this.repository.update(id, updateBody, totalAmount);
+        lockedVehicles = await lockVehiclesForBooking(trx, vehicleIds);
 
-    if (!updated) {
-      throw new NotFoundError('Rental not found');
-    }
+        if (!lockedVehicles.get(vehicleId)) {
+          throw new NotFoundError('Vehicle not found');
+        }
 
-    return updated;
+        if (vehicleId !== existing.vehicle_id && !lockedVehicles.get(existing.vehicle_id)) {
+          throw new NotFoundError('Vehicle not found');
+        }
+      }
+
+      if (isActiveStatus(status)) {
+        const overlappingId = await this.repository.findOverlappingActive(
+          vehicleId,
+          startDate,
+          endDate,
+          id,
+          trx,
+        );
+
+        if (overlappingId !== null) {
+          throw new ConflictError('Vehicle already has an active rental for these dates');
+        }
+      }
+
+      let totalAmount: number | undefined;
+
+      if (datesOrVehicleChanged) {
+        const vehicle = lockedVehicles?.get(vehicleId);
+
+        if (!vehicle) {
+          throw new NotFoundError('Vehicle not found');
+        }
+
+        const days = countRentalDays(startDate, endDate);
+        totalAmount = calculateTotalAmount(Number(vehicle.daily_rate), days);
+      }
+
+      const updateBody: UpdateRentalBody = { ...body };
+
+      if (body.start_date !== undefined) {
+        updateBody.start_date = startDate;
+      }
+
+      if (body.end_date !== undefined) {
+        updateBody.end_date = endDate;
+      }
+
+      const updated = await this.repository.update(id, updateBody, totalAmount, trx);
+
+      if (!updated) {
+        throw new NotFoundError('Rental not found');
+      }
+
+      return updated;
+    });
   }
 
   async delete(id: number): Promise<void> {
-    const cancelled = await this.repository.cancel(id);
+    await db.transaction(async (trx) => {
+      const existing = await this.repository.findByIdForUpdate(id, trx);
 
-    if (!cancelled) {
-      throw new NotFoundError('Rental not found');
-    }
+      if (!existing) {
+        throw new NotFoundError('Rental not found');
+      }
+
+      await lockVehiclesForBooking(trx, [existing.vehicle_id]);
+
+      const cancelled = await this.repository.cancel(id, trx);
+
+      if (!cancelled) {
+        throw new NotFoundError('Rental not found');
+      }
+    });
   }
 }

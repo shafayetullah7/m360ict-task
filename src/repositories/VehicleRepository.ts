@@ -1,3 +1,4 @@
+import type { Knex } from 'knex';
 import db from '../config/db';
 import type {
   CreateVehicleBody,
@@ -108,13 +109,14 @@ export class VehicleRepository {
     return row ? this.mapRow(row) : null;
   }
 
-  async softDelete(id: number): Promise<boolean> {
-    const updated = await db('vehicles')
+  async softDelete(id: number, trx?: Knex.Transaction): Promise<boolean> {
+    const connection = trx ?? db;
+    const updated = await connection('vehicles')
       .where({ id })
       .whereNull('deleted_at')
       .update({
-        deleted_at: db.fn.now(),
-        updated_at: db.fn.now(),
+        deleted_at: connection.fn.now(),
+        updated_at: connection.fn.now(),
       });
 
     return updated > 0;
