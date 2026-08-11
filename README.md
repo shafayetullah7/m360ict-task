@@ -114,7 +114,7 @@ curl -s -X POST http://localhost:4000/auth/login \
   -d '{"email":"staff@example.com","password":"password123"}'
 ```
 
-Response: `{ "token": "...", "staff": { "id", "email", "name" } }`
+Response: `{ "success": true, "status": 200, "message": "Login successful", "data": { "token", "staff": { "id", "email", "name" } } }`
 
 Login is rate-limited (20 requests / 15 minutes per IP).
 
@@ -122,19 +122,44 @@ Login is rate-limited (20 requests / 15 minutes per IP).
 
 ## API reference
 
-Errors use `{ "error": { "message": "..." } }` with status **400** (validation), **401** (auth), **404**, **409** (conflict), **429** (rate limit).
+All JSON responses use the same envelope:
+
+```json
+{
+  "success": true,
+  "status": 200,
+  "message": "Human-readable message",
+  "data": { ... } | null
+}
+```
+
+- **Success:** `success` is `true`; `data` holds the payload (entity, list, report, etc.).
+- **Error:** `success` is `false`; `data` is `null`; `message` describes the problem.
+
+HTTP status codes: **400** (validation), **401** (auth), **404**, **409** (conflict), **429** (rate limit), **500**.
+
+Error example:
+
+```json
+{
+  "success": false,
+  "status": 404,
+  "message": "Vehicle not found",
+  "data": null
+}
+```
 
 ### Health
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/` | No | `{ "message": "API is running" }` |
+| `GET` | `/` | No | Health check |
 
 ### Auth
 
-| Method | Path | Body | Response |
-|--------|------|------|----------|
-| `POST` | `/auth/login` | `{ "email", "password" }` | `{ "token", "staff" }` |
+| Method | Path | Body | Response `data` |
+|--------|------|------|-----------------|
+| `POST` | `/auth/login` | `{ "email", "password" }` | `{ "token", "staff": { "id", "email", "name" } }` |
 
 ### Vehicles
 
@@ -146,9 +171,9 @@ Photos: multipart field `photo` (JPEG, PNG, WebP, max 5MB). Stored in `./uploads
 | `GET` | `/vehicles/:id` | 404 if missing or soft-deleted |
 | `POST` | `/vehicles` | Body or form: `name`, `plate_number`, `category`, `daily_rate`; optional `photo` |
 | `PUT` | `/vehicles/:id` | Partial update; optional new `photo` replaces old file |
-| `DELETE` | `/vehicles/:id` | Soft delete (`deleted_at`); **204** |
+| `DELETE` | `/vehicles/:id` | Soft delete (`deleted_at`); **200** |
 
-List response:
+List `data` shape:
 
 ```json
 {
@@ -167,9 +192,9 @@ Dates: `YYYY-MM-DD`. `total_amount` is **always computed server-side** (`daily_r
 | `GET` | `/rentals/:id` | |
 | `POST` | `/rentals` | Body: `vehicle_id`, `customer_name`, `customer_phone`, `start_date`, `end_date` → **409** if overlap with `booked`/`ongoing` |
 | `PUT` | `/rentals/:id` | Partial update; overlap re-checked when dates/vehicle/status affect active bookings |
-| `DELETE` | `/rentals/:id` | Sets `status` to `cancelled`; **204** |
+| `DELETE` | `/rentals/:id` | Sets `status` to `cancelled`; **200** |
 
-List response:
+List `data` shape:
 
 ```json
 {
@@ -192,11 +217,13 @@ Create body (example):
 
 ### Reports
 
-| Method | Path | Query | Response |
-|--------|------|-------|----------|
+| Method | Path | Query | Response `data` |
+|--------|------|-------|-----------------|
 | `GET` | `/reports/rentals` | `month` (`YYYY-MM`, required), optional `vehicle_id` | See below |
 
 Per vehicle: `id`, `name`, `total_bookings`, `days_rented`, `revenue`. Only days **inside the requested month** count (e.g. Jul 29–Aug 3 → **3** days in August). Cancelled rentals excluded. Includes `top_vehicle` (highest revenue).
+
+Report `data` shape:
 
 ```json
 {
@@ -232,4 +259,4 @@ Per vehicle: `id`, `name`, `total_bookings`, `days_rented`, `revenue`. Only days
 
 ## Project layout
 
-`src/routes` → `src/services` → `src/repositories` (Knex + raw SQL for overlap and reports). Config via `.env` / `.env.example`. Migrations and seeds in `src/db/`.
+`src/routes` → `src/controllers` → `src/services` → `src/repositories` (Knex + raw SQL for overlap and reports). Config via `.env` / `.env.example`. Migrations and seeds in `src/db/`.
