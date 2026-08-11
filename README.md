@@ -1,80 +1,104 @@
 # Vehicle Rental Management Backend
 
-Node.js + TypeScript API for staff-authenticated vehicle and rental management, with overlap detection, server-side pricing, and monthly revenue reports.
+REST API for staff to manage vehicles and rentals: JWT auth, overlap-safe bookings, server-side pricing, and monthly revenue reports.
 
-## Tech Stack
+**Base URL:** `http://localhost:4000`
 
-- **Runtime:** Node.js 22, TypeScript (strict)
-- **Framework:** Express 5
-- **Database:** PostgreSQL 16, Knex
-- **Auth:** argon2 + JWT (Bearer)
-- **Validation:** Joi
-- **Uploads:** Multer (vehicle photos)
+---
 
 ## Prerequisites
 
-- Node.js 20+ and [pnpm](https://pnpm.io/) (Corepack enabled)
-- PostgreSQL 16, or Docker
+- Node.js 20+ and [pnpm](https://pnpm.io/) (`corepack enable`)
+- PostgreSQL 16 — local install, remote server, or Docker (see below)
 
-## Quick Start
+---
 
-### 1. Clone and install
+## How to run
+
+### Option 1 — App on your machine + external Postgres
+
+Use any Postgres you control (local install, cloud, or **only** the Compose Postgres container while the app runs on the host).
 
 ```bash
 cd m360-task
 pnpm install
-```
-
-### 2. Environment
-
-```bash
 cp .env.example .env
 ```
 
-Edit `.env` if needed. With Docker Compose Postgres, use `DB_PORT=5444`.
+Edit `.env` for your database:
 
-### 3. Start PostgreSQL
+| Variable | Example (local Postgres) | Example (Compose Postgres on host) |
+|----------|------------------------|-------------------------------------|
+| `DB_HOST` | `localhost` | `localhost` |
+| `DB_PORT` | `5432` | `5444` |
+| `DB_USER` / `DB_PASSWORD` | your credentials | `postgres` / `postgres` |
+| `DB_NAME` | `express_ts_db` | `express_ts_db` |
+| `JWT_SECRET` | min 32 characters | min 32 characters |
 
-**Docker (recommended):**
+If you only need Postgres in Docker:
 
 ```bash
 docker compose up -d postgres
 ```
 
-**Or** use a local Postgres instance and set `DB_HOST`, `DB_PORT`, etc.
-
-### 4. Database setup
+Then set `DB_PORT=5444` in `.env` and continue:
 
 ```bash
-pnpm migrate
-pnpm seed
+pnpm db:setup    # migrate + seed
+pnpm dev         # http://localhost:4000
 ```
 
-### 5. Run the API
+Production-style run:
 
 ```bash
-pnpm dev
+pnpm build && pnpm start
 ```
 
-Server: `http://localhost:4000`
-
-Production build:
+### Option 2 — Full stack in Docker (app + Postgres)
 
 ```bash
-pnpm build
-pnpm start
+cd m360-task
+cp .env.example .env   # defaults work with Compose Postgres on :5444
+pnpm docker:setup      # build, start containers, migrate + seed inside app
 ```
 
-## Seed Credentials
+API: `http://localhost:4000`
 
-After `pnpm seed`:
+Step by step:
 
-| Field | Value |
-|-------|-------|
-| Email | `staff@example.com` |
-| Password | `password123` |
+```bash
+pnpm docker:up
+pnpm docker:db:setup
+```
 
-Seed data includes 3 vehicles, in-month rentals, a **month-boundary** rental (Jul 29–Aug 3), and a cancelled rental for report testing.
+Inside the app container, DB host is `postgres:5432` (set automatically). `docker:migrate` / `docker:seed` run Knex inside that container.
+
+Stop the stack:
+
+```bash
+pnpm docker:down
+```
+
+**Troubleshooting:** If the container is up but the API fails after dependency changes:
+
+```bash
+docker compose exec -e CI=true app pnpm install
+docker compose restart app
+```
+
+---
+
+## Seed data
+
+After seeding (`pnpm seed` or `pnpm docker:seed`):
+
+| Email | Password |
+|-------|----------|
+| `staff@example.com` | `password123` |
+
+Includes 3 vehicles, in-month rentals, a **Jul 29–Aug 3** boundary rental, and a cancelled rental. Seeding is **idempotent** — re-running skips if data already exists.
+
+---
 
 ## Authentication
 
@@ -84,156 +108,119 @@ Protected routes require:
 Authorization: Bearer <token>
 ```
 
-Login:
-
 ```bash
 curl -s -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"staff@example.com","password":"password123"}'
 ```
 
-Login is rate-limited (20 attempts per 15 minutes per IP).
+Response: `{ "token": "...", "staff": { "id", "email", "name" } }`
 
-## API Overview
+Login is rate-limited (20 requests / 15 minutes per IP).
+
+---
+
+## API reference
+
+Errors use `{ "error": { "message": "..." } }` with status **400** (validation), **401** (auth), **404**, **409** (conflict), **429** (rate limit).
+
+### Health
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/auth/login` | No | Staff login |
-| `GET` | `/vehicles` | Yes | List vehicles (paginated) |
-| `GET` | `/vehicles/:id` | Yes | Get vehicle |
-| `POST` | `/vehicles` | Yes | Create vehicle (+ optional `photo`) |
-| `PUT` | `/vehicles/:id` | Yes | Update vehicle (+ optional `photo`) |
-| `DELETE` | `/vehicles/:id` | Yes | Soft-delete vehicle |
-| `GET` | `/rentals` | Yes | List rentals (filters: `vehicle_id`, `status`, dates) |
-| `GET` | `/rentals/:id` | Yes | Get rental |
-| `POST` | `/rentals` | Yes | Create rental |
-| `PUT` | `/rentals/:id` | Yes | Update rental |
-| `DELETE` | `/rentals/:id` | Yes | Cancel rental |
-| `GET` | `/reports/rentals?month=YYYY-MM` | Yes | Monthly report per vehicle |
+| `GET` | `/` | No | `{ "message": "API is running" }` |
 
-Vehicle photos are served at `/uploads/<filename>`.
+### Auth
 
-## Example Requests
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| `POST` | `/auth/login` | `{ "email", "password" }` | `{ "token", "staff" }` |
 
-```bash
-TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"staff@example.com","password":"password123"}' | jq -r '.token')
+### Vehicles
 
-# List vehicles
-curl -s "http://localhost:4000/vehicles?page=1&limit=10" \
-  -H "Authorization: Bearer $TOKEN"
+Photos: multipart field `photo` (JPEG, PNG, WebP, max 5MB). Stored in `./uploads/`; served at `/uploads/<filename>`.
 
-# Create rental (total_amount computed server-side)
-curl -s -X POST http://localhost:4000/rentals \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "vehicle_id": 1,
-    "customer_name": "Jane Doe",
-    "customer_phone": "555-0100",
-    "start_date": "2026-10-01",
-    "end_date": "2026-10-03"
-  }'
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/vehicles` | Query: `page` (default 1), `limit` (default 10, max 100), `category`, `search` (name) |
+| `GET` | `/vehicles/:id` | 404 if missing or soft-deleted |
+| `POST` | `/vehicles` | Body or form: `name`, `plate_number`, `category`, `daily_rate`; optional `photo` |
+| `PUT` | `/vehicles/:id` | Partial update; optional new `photo` replaces old file |
+| `DELETE` | `/vehicles/:id` | Soft delete (`deleted_at`); **204** |
 
-# Monthly report
-curl -s "http://localhost:4000/reports/rentals?month=2026-08" \
-  -H "Authorization: Bearer $TOKEN"
+List response:
+
+```json
+{
+  "data": [{ "id", "name", "plate_number", "category", "daily_rate", "photo_path", ... }],
+  "meta": { "page", "limit", "total" }
+}
 ```
 
-## Business Logic
+### Rentals
 
-### Rental overlap
+Dates: `YYYY-MM-DD`. `total_amount` is **always computed server-side** (`daily_rate × days`); same start/end = 1 day.
 
-A vehicle cannot have overlapping rentals when status is `booked` or `ongoing`. Overlap uses inclusive dates:
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/rentals` | Query: `vehicle_id`, `status`, `start_date`, `end_date` (overlap-style filter) |
+| `GET` | `/rentals/:id` | |
+| `POST` | `/rentals` | Body: `vehicle_id`, `customer_name`, `customer_phone`, `start_date`, `end_date` → **409** if overlap with `booked`/`ongoing` |
+| `PUT` | `/rentals/:id` | Partial update; overlap re-checked when dates/vehicle/status affect active bookings |
+| `DELETE` | `/rentals/:id` | Sets `status` to `cancelled`; **204** |
 
-```text
-existing.start_date <= new.end_date AND existing.end_date >= new.start_date
+Create body (example):
+
+```json
+{
+  "vehicle_id": 1,
+  "customer_name": "Jane Doe",
+  "customer_phone": "555-0100",
+  "start_date": "2026-10-01",
+  "end_date": "2026-10-03"
+}
 ```
 
-`cancelled` and `completed` rentals do not block new bookings. Adjacent dates (e.g. ends Aug 5, starts Aug 6) are allowed.
+### Reports
 
-Overlap checks use raw SQL in `RentalRepository`. Rental create uses a DB transaction with `FOR UPDATE` on the vehicle row.
+| Method | Path | Query | Response |
+|--------|------|-------|----------|
+| `GET` | `/reports/rentals` | `month` (`YYYY-MM`, required), optional `vehicle_id` | See below |
 
-### Pricing
+Per vehicle: `id`, `name`, `total_bookings`, `days_rented`, `revenue`. Only days **inside the requested month** count (e.g. Jul 29–Aug 3 → **3** days in August). Cancelled rentals excluded. Includes `top_vehicle` (highest revenue).
 
-```text
-total_amount = daily_rate × countRentalDays(start_date, end_date)
+```json
+{
+  "month": "2026-08",
+  "vehicles": [{ "id", "name", "total_bookings", "days_rented", "revenue" }],
+  "top_vehicle": { "id", "name", "revenue" }
+}
 ```
 
-Same-day rental = 1 day. Client cannot set `total_amount`; it is always computed on create/update when dates or vehicle change.
+---
 
-### Monthly reports
+## Business rules (summary)
 
-`GET /reports/rentals?month=YYYY-MM` aggregates per vehicle using raw SQL:
+- **Overlap:** Only `booked` and `ongoing` block new bookings. Condition: `existing.start ≤ new.end AND existing.end ≥ new.start`. Checked on create and update (raw SQL + transactions/advisory locks).
+- **Pricing:** `total_amount = daily_rate × inclusive days`.
+- **Reports:** Revenue = `daily_rate × days in month`; clipped to calendar month boundaries.
 
-- **Days in month:** clip each rental to the calendar month  
-  `LEAST(end_date, month_end) - GREATEST(start_date, month_start) + 1`
-- **Revenue:** `daily_rate × clipped_days`, summed per vehicle
-- **Cancelled** rentals excluded; soft-deleted vehicles excluded
-- **Example:** Jul 29–Aug 3 counts as **3 days in August** (Aug 1–3), not 6
+---
 
-Response includes `vehicles[]` and `top_vehicle` (highest revenue). Optional `vehicle_id` filter.
-
-## Scripts
+## Useful commands
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start dev server (ts-node-dev) |
-| `pnpm build` | TypeScript compile |
-| `pnpm start` | Run compiled server |
-| `pnpm lint` | ESLint |
-| `pnpm lint:fix` | ESLint with auto-fix |
-| `pnpm format` | Prettier |
-| `pnpm migrate` | Run migrations |
-| `pnpm migrate:rollback` | Rollback last migration batch |
-| `pnpm seed` | Run seeds |
+| `pnpm dev` / `pnpm start` | Run API (dev / production build) |
+| `pnpm db:setup` | Migrate + seed (host, uses `.env`) |
+| `pnpm migrate` / `pnpm seed` | Database only (host) |
+| `pnpm docker:setup` | Up + migrate + seed (containers) |
+| `pnpm docker:up` / `pnpm docker:down` | Start / stop Compose stack |
+| `pnpm docker:migrate` / `pnpm docker:seed` | Migrate / seed inside app container |
+| `pnpm lint` / `pnpm build` | Lint / compile |
 
-## Project Structure
+---
 
-```text
-src/
-├── config/          # env, db
-├── db/migrations/   # Knex migrations
-├── db/seeds/        # Seed data
-├── middleware/      # auth, validate, upload, errors, rate limit
-├── repositories/    # Knex data access (raw SQL for overlap + reports)
-├── routes/          # Thin HTTP handlers
-├── services/        # Business logic
-├── types/           # TypeScript DTOs
-├── utils/           # date/rental helpers, errors
-├── app.ts
-└── server.ts
-```
+## Project layout
 
-Routes do not import Knex directly; they delegate to services.
-
-## Docker
-
-```bash
-docker compose up -d postgres   # Postgres on localhost:5444
-docker compose up -d            # Postgres + app (port 4000)
-```
-
-Ensure `.env` matches compose credentials (`postgres` / `postgres`, port `5444` on host).
-
-## Error Responses
-
-```json
-{ "error": { "message": "Human-readable message" } }
-```
-
-| Status | Meaning |
-|--------|---------|
-| 400 | Validation error |
-| 401 | Missing/invalid JWT |
-| 404 | Resource not found |
-| 409 | Conflict (overlap, duplicate plate) |
-| 429 | Login rate limit |
-| 500 | Internal server error |
-
-## Development Notes
-
-- Planning docs live outside this repo (`VEHICLE_RENTAL_BACKEND_10_PHASE_PLAN.md` in parent folder).
-- `.env` is gitignored; never commit secrets.
-- `knexfile.ts` is TypeScript-only; compiled `knexfile.js` is gitignored.
+`src/routes` → `src/services` → `src/repositories` (Knex + raw SQL for overlap and reports). Config via `.env` / `.env.example`. Migrations and seeds in `src/db/`.

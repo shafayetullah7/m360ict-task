@@ -13,12 +13,22 @@
     "migrate": "knex migrate:latest --knexfile knexfile.ts",
     "migrate:rollback": "knex migrate:rollback --knexfile knexfile.ts",
     "seed": "knex seed:run --knexfile knexfile.ts",
+    "db:setup": "pnpm migrate && pnpm seed",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:migrate": "docker compose exec -T app pnpm migrate",
+    "docker:seed": "docker compose exec -T app pnpm seed",
+    "docker:db:setup": "pnpm docker:migrate && pnpm docker:seed",
+    "docker:setup": "pnpm docker:up && sleep 3 && pnpm docker:db:setup",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.24.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["argon2"]
+  },
   "dependencies": {
     "argon2": "^0.45.1",
     "dotenv": "^17.4.2",

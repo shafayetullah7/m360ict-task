@@ -1,16 +1,20 @@
 FROM node:22-alpine
 
+# Native build toolchain for argon2
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 
-# Enable pnpm via Corepack
 RUN corepack enable
 
-# Install dependencies first (better layer caching)
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
-# Copy the rest of the project
 COPY . .
+
+RUN mkdir -p uploads && chown -R node:node /app
+
+USER node
 
 EXPOSE 4000
 

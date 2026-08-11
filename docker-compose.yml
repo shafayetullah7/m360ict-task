@@ -20,6 +20,10 @@ services:
       - postgres
     env_file:
       - .env
+    environment:
+      # Inside Compose, Postgres is the service name on the internal port.
+      DB_HOST: postgres
+      DB_PORT: 5432
     ports:
       - "4000:4000"
     volumes:
